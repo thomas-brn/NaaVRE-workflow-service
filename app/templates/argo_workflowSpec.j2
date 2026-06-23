@@ -142,6 +142,17 @@ templates:
             name: {{ k8s_secret_name }}
             key: {{ s.name }}
     {%  endfor %}
+    {% if extraEnv is defined and extraEnv %}
+    {% for env_var in extraEnv %}
+      {% if env_var.valueFrom is defined %}
+      - name: {{ env_var.name }}
+        valueFrom: {{ env_var.valueFrom | tojson }}
+      {% else %}
+      - name: {{ env_var.name }}
+        value: "{{ env_var.value }}"
+      {% endif %}
+    {% endfor %}
+    {% endif %}
     command: ["/bin/bash", "-c"]
     args:
       - source /venv/bin/activate;

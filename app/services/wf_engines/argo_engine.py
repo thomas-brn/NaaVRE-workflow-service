@@ -49,6 +49,7 @@ class ArgoEngine(WFEngine, ABC):
         self.token = (vl_config.wf_engine_config.access_token.replace
                       ('"', '')).replace('Bearer ', '')
         self.extraVolumeMounts = vl_config.wf_engine_config.extraVolumeMounts
+        self.extraEnv = vl_config.wf_engine_config.extraEnv
         self.secrets_creator_api_endpoint = (vl_config.wf_engine_config.
                                              secrets_creator_api_endpoint)
         if not self.secrets_creator_api_endpoint:
@@ -145,6 +146,7 @@ class ArgoEngine(WFEngine, ABC):
             workdir_storage_size=workdir_storage_size,
             cron_schedule=self.cron_schedule,
             extraVolumeMounts=self.user_extraVolumeMounts or [],
+            extraEnv=self.extraEnv or [],
             default_max_branches=default_max_branches
         )
 
