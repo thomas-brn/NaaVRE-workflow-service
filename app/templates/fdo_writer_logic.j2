@@ -1,0 +1,82 @@
+import datetime
+import json
+import os
+import pathlib
+import shutil
+import sys
+
+# Argo substitutes these placeholders at runtime before running the script.
+fdo_input   = "{{ '{{inputs.parameters.' }}{{ special_dep.from_port }}{{ '}}' }}"
+run_id      = "{{ '{{inputs.parameters.run_id_' }}{{ node.id[:7] }}{{ '}}' }}"
+viz_kind    = "{{ '{{inputs.parameters.viz_kind_' }}{{ node.id[:7] }}{{ '}}' }}"
+output_name = "{{ '{{inputs.parameters.output_name_' }}{{ node.id[:7] }}{{ '}}' }}"
+data_format = "{{ '{{inputs.parameters.data_format_' }}{{ node.id[:7] }}{{ '}}' }}"
+
+# Resolve the source path: absolute paths are used as-is, relative ones are
+# looked up under the shared workdir (/tmp/data, the workflow-scoped PVC).
+src = fdo_input if fdo_input.startswith('/') else os.path.join('/tmp/data', fdo_input)
+if not os.path.exists(src):
+    print(f'ERROR: input file not found: {src}', file=sys.stderr)
+    sys.exit(1)
+
+# The user storage PVC is mounted here with subPath={username} already applied
+# by the Argo engine (see workflow-service argo_engine.py).
+storage_base = '/home/jovyan/Cloud Storage/naa-vre-user-data'
+run_dir      = os.path.join(storage_base, '.naavre-runs', run_id)
+outputs_dir  = os.path.join(run_dir, 'outputs')
+pathlib.Path(outputs_dir).mkdir(parents=True, exist_ok=True)
+
+# Copy data file to persistent storage
+dest = os.path.join(outputs_dir, output_name)
+shutil.copy2(src, dest)
+print(f'Copied {src} -> {dest}')
+
+# Build or update ro-crate-metadata.json for this run
+crate_path = os.path.join(run_dir, 'ro-crate-metadata.json')
+if os.path.exists(crate_path):
+    with open(crate_path) as f:
+        crate = json.load(f)
+else:
+    crate = {
+        '@context': 'https://w3id.org/ro/crate/1.1/context',
+        '@graph': [
+            {
+                '@id': 'ro-crate-metadata.json',
+                '@type': 'CreativeWork',
+                'about': {'@id': './'},
+                'conformsTo': {'@id': 'https://w3id.org/ro/crate/1.1'},
+            },
+            {
+                '@id': './',
+                '@type': 'Dataset',
+                'naavre:runId': run_id,
+                'naavre:status': 'in-progress',
+                'dateCreated': datetime.datetime.utcnow().isoformat() + 'Z',
+                'hasPart': [],
+            },
+        ],
+    }
+
+root = next(e for e in crate['@graph'] if e.get('@id') == './')
+
+entity_id = f'outputs/{output_name}'
+entity = {
+    '@id': entity_id,
+    '@type': 'File',
+    'name': output_name,
+    'encodingFormat': data_format,
+    'naavre:vizKind': viz_kind,
+}
+existing_ids = {e['@id'] for e in crate['@graph']}
+if entity_id in existing_ids:
+    crate['@graph'] = [e if e['@id'] != entity_id else entity for e in crate['@graph']]
+else:
+    crate['@graph'].append(entity)
+
+ref = {'@id': entity_id}
+if ref not in root.get('hasPart', []):
+    root.setdefault('hasPart', []).append(ref)
+
+with open(crate_path, 'w') as f:
+    json.dump(crate, f, indent=2, ensure_ascii=False)
+print(f'Wrote {crate_path}')

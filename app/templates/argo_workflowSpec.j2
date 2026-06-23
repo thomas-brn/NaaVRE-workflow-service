@@ -31,8 +31,10 @@ templates:
   dag:
     tasks:
     {% for node in nodes.values() %}
-    {% set is_special_node = node.type == 'splitter' or node.type == 'merger' %}
     {% set is_splitter = node.type == 'splitter' %}
+    {% set is_merger = node.type == 'merger' %}
+    {% set is_fdo_writer = node.type == 'fdo-writer' %}
+    {% set is_special_node = is_splitter or is_merger or is_fdo_writer %}
     {% set title =  node.type + "-" + node.id[:7] if is_special_node else node.properties.cell.title+ "-" + node.id[:7] %}
     - name: {{ title }}
       {% if dependencies_dag[node.id]|length > 0 %}
@@ -64,8 +66,10 @@ templates:
       {% endif %}
     {% endfor %}
 {% for node in nodes.values() %}
-{% set is_special_node = node.type == 'splitter' or node.type == 'merger' %}
 {% set is_splitter = node.type == 'splitter' %}
+{% set is_merger = node.type == 'merger' %}
+{% set is_fdo_writer = node.type == 'fdo-writer' %}
+{% set is_special_node = is_splitter or is_merger or is_fdo_writer %}
 {% set title = node.type + "-" + node.id[:7] if is_special_node else node.properties.cell.title + "-" + node.id[:7] %}
 {% set secrets = [] if is_special_node else node.properties.cell.secrets %}
 {% set ports = node.ports %}
@@ -82,6 +86,11 @@ templates:
     {% endif %}
     {% endfor %}
   {% endif %}
+  {% set ns = namespace(has_outputs=false) %}
+  {% for port in ports.values() %}
+  {% if port.type == 'right' %}{% set ns.has_outputs = true %}{% endif %}
+  {% endfor %}
+  {% if ns.has_outputs %}
   outputs:
     parameters:
     {% for port in ports.values() %}
@@ -91,7 +100,26 @@ templates:
           path: /tmp/{{ port.id }}_{{ node.id[:7] }}.json
     {% endif %}
     {% endfor %}
-  {% if is_special_node %}
+  {% endif %}
+  {% if is_fdo_writer %}
+  {% set special_dep = dependencies_dag[node.id][0] %}
+  script:
+    image: python:3.11-alpine
+    imagePullPolicy: IfNotPresent
+    command: [python]
+    volumeMounts:
+    - name: workdir
+      mountPath: /tmp/data
+    {% for vol in extraVolumeMounts %}
+    - name: {{ vol.name }}
+      mountPath: {{ vol.mountPath }}
+      {% if vol.subPath is defined %}
+      subPath: {{ vol.subPath }}
+      {% endif %}
+    {% endfor %}
+    source: |
+      {{ include('fdo_writer_logic.j2', special_dep=special_dep, node=node) | indent(6) }}
+  {% elif is_splitter or is_merger %}
   {% set special_dep = dependencies_dag[node.id][0] %}
   script:
     image: python:alpine3.9
