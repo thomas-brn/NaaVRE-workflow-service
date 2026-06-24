@@ -1,16 +1,14 @@
 entrypoint: {{ workflow_name }}
 serviceAccountName: {{ workflow_service_account }}
-{% if cron_schedule %}
 volumes:
 {% for vol in extraVolumeMounts %}
 - name: {{ vol.name }}
   persistentVolumeClaim:
     claimName: {{ vol.name }}
+{% endfor %}
 - name: workspace
   emptyDir:
     medium: Memory
-{% endfor %}
-{% endif %}
 volumeClaimTemplates:
 - metadata:
     name: workdir
