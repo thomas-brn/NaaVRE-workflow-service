@@ -49,6 +49,10 @@ class ArgoEngine(WFEngine, ABC):
         self.token = (vl_config.wf_engine_config.access_token.replace
                       ('"', '')).replace('Bearer ', '')
         self.extraVolumeMounts = vl_config.wf_engine_config.extraVolumeMounts
+        # Per-virtual-lab extra env vars injected into every cell container
+        # (see wf_engine_config.py); used e.g. to configure cloud storage
+        # access for the fdo-writer special cell without exposing it as a
+        # user-facing secret in the composer.
         self.extraEnv = vl_config.wf_engine_config.extraEnv
         self.secrets_creator_api_endpoint = (vl_config.wf_engine_config.
                                              secrets_creator_api_endpoint)

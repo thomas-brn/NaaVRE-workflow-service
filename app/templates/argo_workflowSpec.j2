@@ -1,5 +1,9 @@
 entrypoint: {{ workflow_name }}
 serviceAccountName: {{ workflow_service_account }}
+{# The `workspace` volume (used to pass cell inputs/outputs as files) and the
+   extraVolumeMounts (e.g. the user's cloud storage PVC, needed by fdo-writer
+   and any cell mounting it) are always declared now: earlier this whole
+   block only existed for cron-scheduled workflows. #}
 volumes:
 {% for vol in extraVolumeMounts %}
 - name: {{ vol.name }}
@@ -29,6 +33,8 @@ templates:
   dag:
     tasks:
     {% for node in nodes.values() %}
+    {# Special nodes (splitter/merger/fdo-writer) are titled by type, not by
+       a catalogue cell title, since they have no backing catalogue cell. #}
     {% set is_splitter = node.type == 'splitter' %}
     {% set is_merger = node.type == 'merger' %}
     {% set is_fdo_writer = node.type == 'fdo-writer' %}
@@ -84,6 +90,9 @@ templates:
     {% endif %}
     {% endfor %}
   {% endif %}
+  {# fdo-writer has no `right` (output) port — it's a terminal node in the
+     DAG — so the `outputs:` block Argo requires for tasks other steps
+     depend on must be omitted entirely, not just left empty. #}
   {% set ns = namespace(has_outputs=false) %}
   {% for port in ports.values() %}
   {% if port.type == 'right' %}{% set ns.has_outputs = true %}{% endif %}
@@ -100,6 +109,10 @@ templates:
     {% endfor %}
   {% endif %}
   {% if is_fdo_writer %}
+  {# fdo-writer runs the shared fdo_writer_logic.j2 script (writes the input
+     file + updates ro-crate-metadata.json under the run's storage
+     directory), mounting the same storage volumes as a regular cell would
+     so it can reach the user's cloud storage PVC. #}
   {% set special_dep = dependencies_dag[node.id][0] %}
   script:
     image: python:3.11-alpine
@@ -168,6 +181,10 @@ templates:
             name: {{ k8s_secret_name }}
             key: {{ s.name }}
     {%  endfor %}
+    {# extraEnv (from the virtual lab's wf_engine_config) lets ops inject
+       extra environment variables into every cell container — e.g.
+       credentials or endpoints the cloud storage mount needs, without those
+       secrets going through the composer's per-cell secrets form. #}
     {% if extraEnv is defined and extraEnv %}
     {% for env_var in extraEnv %}
       {% if env_var.valueFrom is defined %}

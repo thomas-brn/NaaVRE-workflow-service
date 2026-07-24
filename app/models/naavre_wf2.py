@@ -38,7 +38,11 @@ class Conf(BaseModel):
 
 
 class Param(BaseVariable):
-    default_value: Optional[str]
+    # `= None` default needed for pydantic v2: without it, Optional[str]
+    # alone still makes the field required (only nullable, not optional).
+    # Matters now that fdo-writer's run_id/viz_kind/etc. params are declared
+    # without an explicit default_value on the frontend/catalogue side.
+    default_value: Optional[str] = None
 
 
 class Secret(BaseVariable):
@@ -67,7 +71,10 @@ class Cell(BaseModel):
 
 
 class SpecialCell(BaseModel):
-    type: Literal['splitter', 'merger']
+    # fdo-writer: injected by the composer for the in-lab visualisation
+    # feature; the Argo template renders it via fdo_writer_logic.j2 instead
+    # of running a catalogue container image.
+    type: Literal['splitter', 'merger', 'fdo-writer']
     title: str
     container_image: str
     dependencies: Sequence[Dependency]

@@ -20,6 +20,8 @@ spec:
         claimName: {{ vol.name }}
     {% endfor %}
     {% endif %}
+    {# extraEnv is forwarded straight through to argo_workflowSpec.j2, same
+       as extraVolumeMounts, for both the cron and one-off workflow shapes. #}
     {% if cron_schedule %}
     schedule: "{{ cron_schedule }}"
     workflowSpec:

@@ -6,7 +6,10 @@ import shutil
 import sys
 
 # Argo substitutes these placeholders at runtime before running the script.
-fdo_input   = "{{ '{{inputs.parameters.' }}{{ special_dep.from_port }}{{ '}}' }}"
+# fdo_input is not quoted here (unlike the params below): Argo's raw
+# substitution can itself be a quoted JSON string (e.g. `"foo.csv"`), and
+# wrapping it in another pair of quotes would double-quote it.
+fdo_input   = {{ '{{inputs.parameters.' }}{{ special_dep.from_port }}{{ '}}' }}
 run_id      = "{{ '{{inputs.parameters.run_id_' }}{{ node.id[:7] }}{{ '}}' }}"
 viz_kind    = "{{ '{{inputs.parameters.viz_kind_' }}{{ node.id[:7] }}{{ '}}' }}"
 output_name = "{{ '{{inputs.parameters.output_name_' }}{{ node.id[:7] }}{{ '}}' }}"
